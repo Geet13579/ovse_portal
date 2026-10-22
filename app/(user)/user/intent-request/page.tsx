@@ -291,7 +291,7 @@ export default function IntentRequestPage() {
 
             timeoutId = setTimeout(() => {
                 void checkStatus(id);
-            }, 10_000);
+            }, 3_000);
         };
 
         const checkStatus = async (id: string): Promise<void> => {
@@ -540,7 +540,7 @@ export default function IntentRequestPage() {
                                                 </div>
 
                                                 <h3 className="mt-3 text-lg font-bold text-green-700 dark:text-green-400">
-                                                    Payment Successful!
+                                                    Successful!
                                                 </h3>
 
                                                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -591,9 +591,16 @@ export default function IntentRequestPage() {
                                                         Current status
                                                     </p>
 
-                                                    <p className="mt-1 font-semibold capitalize text-slate-900 dark:text-white">
+                                                    {/* <p className="mt-1 font-semibold capitalize text-slate-900 dark:text-white">
                                                         {transactionStatus}
+                                                    </p> */}
+
+                                                    <p className="mt-1 font-semibold capitalize text-slate-900 dark:text-white">
+                                                        {
+                                                            customer ? "Success" : "Pending"
+                                                        }
                                                     </p>
+
                                                 </div>
 
                                                 {customer && (
