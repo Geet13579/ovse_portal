@@ -506,14 +506,14 @@ export default function IntentRequestPage() {
                             Keep this page open while your transaction is being processed.
                         </p>
 
-                        {error && (
+                        {/* {error && (
                             <div
                                 role="alert"
                                 className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300"
                             >
                                 {error}
                             </div>
-                        )}
+                        )} */}
 
                         <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50 sm:p-6">
                             {details && qrPath ? (
@@ -532,9 +532,8 @@ export default function IntentRequestPage() {
                                     </div>
 
                                     {/* Status and customer information */}
-                                    {paymentSuccess ? (
-                                        <div className="mt-5 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-
+                                    <div className="mt-5 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+                                        {paymentSuccess ? (
                                             <div className="text-center">
                                                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-3xl font-bold text-green-600 dark:bg-green-950/40 dark:text-green-400">
                                                     ✓
@@ -574,73 +573,62 @@ export default function IntentRequestPage() {
                                                     </p>
                                                 )}
                                             </div>
-                                        </div>
-                                    ) : (
-                                        ""
-                                        // <div>
-                                        //     <div className="flex items-center gap-3">
-                                        //         {isPolling || loading ? (
-                                        //             <div className="h-7 w-7 shrink-0 animate-spin rounded-full border-2 border-teal-200 border-t-teal-700" />
-                                        //         ) : (
-                                        //             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                                        //                 !
-                                        //             </div>
-                                        //         )}
+                                        ) : (
+                                            <div>
+                                                <div className="flex items-center gap-3">
+                                                    {/* {isPolling || loading ? (
+                                                        <div className="h-7 w-7 shrink-0 animate-spin rounded-full border-2 border-teal-200 border-t-teal-700" />
+                                                    ) : (
+                                                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                                                            !
+                                                        </div>
+                                                    )} */}
 
-                                        //         <div>
-                                        //             <h3 className="font-semibold text-slate-900 dark:text-white">
-                                        //                 Please wait...
-                                        //             </h3>
+                                                </div>
 
-                                        //             <p className="text-sm text-slate-500 dark:text-slate-400">
-                                        //                 We are verifying your transaction.
-                                        //             </p>
-                                        //         </div>
-                                        //     </div>
+                                                <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                        Current status
+                                                    </p>
 
-                                        //     <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-                                        //         <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        //             Current status
-                                        //         </p>
+                                                    <p className="mt-1 font-semibold capitalize text-slate-900 dark:text-white">
+                                                        {transactionStatus}
+                                                    </p>
+                                                </div>
 
-                                        //         <p className="mt-1 font-semibold capitalize text-slate-900 dark:text-white">
-                                        //             {transactionStatus}
-                                        //         </p>
-                                        //     </div>
+                                                {customer && (
+                                                    <div className="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                            Customer Name
+                                                        </p>
 
-                                        //     {customer && (
-                                        //         <div className="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                                        //             <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        //                 Customer Name
-                                        //             </p>
+                                                        <p className="mt-1 break-words font-semibold text-slate-900 dark:text-white">
+                                                            {customer.name}
+                                                        </p>
 
-                                        //             <p className="mt-1 break-words font-semibold text-slate-900 dark:text-white">
-                                        //                 {customer.name}
-                                        //             </p>
+                                                        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                                                            Mobile Number
+                                                        </p>
 
-                                        //             <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                                        //                 Mobile Number
-                                        //             </p>
+                                                        <p className="mt-1 font-semibold text-slate-900 dark:text-white">
+                                                            {customer.mobile}
+                                                        </p>
+                                                    </div>
+                                                )}
 
-                                        //             <p className="mt-1 font-semibold text-slate-900 dark:text-white">
-                                        //                 {customer.mobile}
-                                        //             </p>
-                                        //         </div>
-                                        //     )}
+                                                <p className="mt-4 text-center text-xs text-slate-400">
+                                                    Please do not close this page.
+                                                </p>
 
-                                        //     <p className="mt-4 text-center text-xs text-slate-400">
-                                        //         Please do not close this page.
-                                        //     </p>
-
-                                        //     {txnId && (
-                                        //         <p className="mt-3 break-all text-center text-xs text-slate-400">
-                                        //             Transaction ID: {txnId}
-                                        //         </p>
-                                        //     )}
-                                        // </div>
-                                    )}
+                                                {txnId && (
+                                                    <p className="mt-3 break-all text-center text-xs text-slate-400">
+                                                        Transaction ID: {txnId}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-
                             ) : (
                                 <div className="flex min-h-[320px] flex-col items-center justify-center px-4 text-center">
                                     <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-teal-100 bg-white text-4xl text-teal-700 dark:border-teal-900 dark:bg-slate-900 dark:text-teal-300">
