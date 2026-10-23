@@ -50,7 +50,6 @@ function findObjectWithQr(value: unknown): IntentDetails | null {
     }
 
     if (!value || typeof value !== "object") return null;
-
     const obj = value as Record<string, unknown>;
 
     if (
@@ -70,9 +69,7 @@ function findObjectWithQr(value: unknown): IntentDetails | null {
 }
 
 function resolveQrUrl(qrPath: string, apiUrl: string): string {
-    if (/^(https?:|data:image\/)/i.test(qrPath)) {
-        return qrPath;
-    }
+    if (/^(https?:|data:image\/)/i.test(qrPath)) return qrPath;
 
     const normalizedPath = qrPath
         .replace(/\\/g, "/")
@@ -94,14 +91,12 @@ function findCustomerDetails(value: unknown): CustomerDetails | null {
     }
 
     if (!value || typeof value !== "object") return null;
-
     const obj = value as Record<string, unknown>;
 
     if (
         typeof obj.name === "string" &&
         obj.name.trim() &&
-        (typeof obj.mobile === "string" ||
-            typeof obj.mobile === "number")
+        (typeof obj.mobile === "string" || typeof obj.mobile === "number")
     ) {
         return {
             name: obj.name.trim(),
@@ -127,13 +122,11 @@ function findTransactionId(value: unknown): string {
     }
 
     if (!value || typeof value !== "object") return "";
-
     const obj = value as Record<string, unknown>;
 
     if (typeof obj.txn_id === "string" && obj.txn_id.trim()) {
         return obj.txn_id.trim();
     }
-
     if (typeof obj.txn === "string" && obj.txn.trim()) {
         return obj.txn.trim();
     }
@@ -146,19 +139,6 @@ function findTransactionId(value: unknown): string {
     return "";
 }
 
-
-function getFriendlyStatus(status: string, polling: boolean, loading: boolean): string {
-    const normalized = status.trim().toLowerCase();
-    if (["success", "successful", "completed", "paid"].includes(normalized)) return "Success";
-    if (["failed", "failure"].includes(normalized)) return "Payment Failed";
-    if (["expired"].includes(normalized)) return "QR Expired";
-    if (["cancelled", "canceled"].includes(normalized)) return "Payment Cancelled";
-    if (["processing", "in_process", "in progress"].includes(normalized)) return "Processing Payment";
-    if (loading && !polling) return "Preparing QR Code";
-    if (polling) return "Pending";
-    return "Checking Status";
-}
-
 function findTransactionStatus(value: unknown): string {
     if (Array.isArray(value)) {
         for (const item of value) {
@@ -169,7 +149,6 @@ function findTransactionStatus(value: unknown): string {
     }
 
     if (!value || typeof value !== "object") return "";
-
     const obj = value as Record<string, unknown>;
 
     const explicitStatus =
@@ -194,6 +173,31 @@ function findTransactionStatus(value: unknown): string {
     return "";
 }
 
+function getFriendlyStatus(
+    status: string,
+    polling: boolean,
+    loading: boolean
+): string {
+    const normalized = status.trim().toLowerCase();
+
+    if (["success", "successful", "completed", "paid"].includes(normalized))
+        return "Success";
+    if (["failed", "failure", "error"].includes(normalized))
+        return "Payment Failed";
+    if (normalized === "expired") return "QR Expired";
+    if (["cancelled", "canceled"].includes(normalized))
+        return "Payment Cancelled";
+    if (["processing", "in_process", "in progress"].includes(normalized))
+        return "Processing Payment";
+    if (loading && !polling) return "Preparing QR Code";
+    if (polling) return "Pending";
+    return "Checking Status";
+}
+
+const INTENT_INTERVAL_MS = 120_000; // 2 minutes
+const STATUS_INTERVAL_MS = 3_000; // 3 seconds
+const REQUEST_TIMEOUT_MS = 8_000; // 8 seconds
+
 export default function TransactionQR() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -204,262 +208,379 @@ export default function TransactionQR() {
     const [paymentSuccess, setPaymentSuccess] = useState(false);
     const [successCountdown, setSuccessCountdown] = useState(10);
     const [isPolling, setIsPolling] = useState(false);
-    const requestInFlight = useRef(false);
-    const successHandled = useRef(false);
+
     const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "");
 
-    // Generate QR. If txn_id is supplied, send it in the POST body.
-    const createIntent = useCallback(
-        async (transactionId?: string): Promise<IntentDetails | null> => {
-            if (requestInFlight.current) return null;
+    const mountedRef = useRef(false);
+    const currentTxnIdRef = useRef("");
+    const intentInFlightRef = useRef(false);
+    const statusInFlightRef = useRef(false);
+    const successHandledRef = useRef(false);
+    const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const intentTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const statusControllerRef = useRef<AbortController | null>(null);
 
-            requestInFlight.current = true;
+    const createIntent = useCallback(async (): Promise<IntentDetails | null> => {
+        if (intentInFlightRef.current) return null;
+        intentInFlightRef.current = true;
+
+        if (mountedRef.current) {
             setLoading(true);
             setError("");
+        }
 
-            try {
-                if (!apiUrl) {
-                    throw new Error(
-                        "API configuration missing. Check NEXT_PUBLIC_API_URL."
-                    );
-                }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+            () => controller.abort(),
+            REQUEST_TIMEOUT_MS
+        );
 
-                const token = getToken();
+        try {
+            if (!apiUrl) {
+                throw new Error("API configuration missing. Check NEXT_PUBLIC_API_URL.");
+            }
 
-                if (!token) {
-                    throw new Error("Login token not found. Please sign in again.");
-                }
+            const token = getToken();
+            if (!token) {
+                throw new Error("Login token not found. Please sign in again.");
+            }
 
-                const response = await fetch(
-                    `${apiUrl}/api/intent/request-intent`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${token}`,
-                        },
-                        ...(transactionId
-                            ? {
-                                body: JSON.stringify({
-                                    txn_id: transactionId,
-                                }),
-                            }
-                            : {}),
-                        cache: "no-store",
-                    }
+            const response = await fetch(`${apiUrl}/api/intent/request-intent`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                cache: "no-store",
+                signal: controller.signal,
+            });
+
+            const result = (await response.json().catch(() => ({}))) as ApiResult;
+
+            if (!response.ok || result.status === false) {
+                throw new Error(
+                    result.message || `QR request failed (HTTP ${response.status}).`
                 );
+            }
 
-                const result = (await response.json().catch(() => ({}))) as ApiResult;
+            const parsed = findObjectWithQr(result.data);
+            const qrPath = parsed?.qr_img || parsed?.qrPath || parsed?.qr_url;
 
-                if (!response.ok || result.status === false) {
-                    throw new Error(
-                        result.message ||
-                        `QR request failed (HTTP ${response.status}).`
-                    );
-                }
+            if (!parsed || !qrPath) {
+                throw new Error(
+                    result.message || "QR image not found in the API response."
+                );
+            }
 
-                const parsed = findObjectWithQr(result.data);
-                const qrPath =
-                    parsed?.qr_img || parsed?.qrPath || parsed?.qr_url;
+            const returnedTxnId =
+                findTransactionId(result) || parsed.txn_id || parsed.txn || "";
 
-                if (!parsed || !qrPath) {
-                    throw new Error(
-                        result.message || "QR image not found in the API response."
-                    );
-                }
+            const updatedDetails: IntentDetails = {
+                ...parsed,
+                ...(returnedTxnId ? { txn_id: returnedTxnId } : {}),
+            };
 
-                setDetails(parsed);
-
-                const returnedTxnId =
-                    findTransactionId(result) ||
-                    parsed.txn_id ||
-                    parsed.txn;
-
+            if (mountedRef.current) {
+                setDetails(updatedDetails);
                 if (returnedTxnId) {
                     setTxnId(returnedTxnId);
                 }
-
-                return parsed;
-            } catch (err) {
-                setError(
-                    err instanceof Error ? err.message : "Could not generate QR."
-                );
-                return null;
-            } finally {
-                requestInFlight.current = false;
-                setLoading(false);
             }
+
+            return updatedDetails;
+        } catch (err) {
+            if (mountedRef.current) {
+                setError(
+                    err instanceof Error
+                        ? err.name === "AbortError"
+                            ? "Intent request timed out. Will retry on the next cycle."
+                            : err.message
+                        : "Could not generate QR."
+                );
+            }
+            return null;
+        } finally {
+            clearTimeout(timeoutId);
+            intentInFlightRef.current = false;
+            if (mountedRef.current) setLoading(false);
+        }
+    }, [apiUrl]);
+
+    const stopStatusPolling = useCallback(() => {
+        if (statusTimerRef.current) {
+            clearTimeout(statusTimerRef.current);
+            statusTimerRef.current = null;
+        }
+
+        statusControllerRef.current?.abort();
+        statusControllerRef.current = null;
+        statusInFlightRef.current = false;
+
+        if (mountedRef.current) setIsPolling(false);
+    }, []);
+
+    const startStatusPolling = useCallback(
+        (id: string) => {
+            if (!id || !mountedRef.current || successHandledRef.current) return;
+
+            // Do not restart if this transaction is already being polled.
+            if (
+                currentTxnIdRef.current === id &&
+                (statusTimerRef.current || statusInFlightRef.current)
+            ) {
+                return;
+            }
+
+            if (statusTimerRef.current) {
+                clearTimeout(statusTimerRef.current);
+                statusTimerRef.current = null;
+            }
+
+            statusControllerRef.current?.abort();
+            statusControllerRef.current = null;
+            statusInFlightRef.current = false;
+
+            currentTxnIdRef.current = id;
+            setTxnId(id);
+            setIsPolling(true);
+            setTransactionStatus("Pending");
+
+            const checkStatus = async (): Promise<void> => {
+                if (
+                    !mountedRef.current ||
+                    successHandledRef.current ||
+                    currentTxnIdRef.current !== id
+                ) {
+                    return;
+                }
+
+                // Prevent overlapping status requests.
+                if (statusInFlightRef.current) {
+                    statusTimerRef.current = setTimeout(
+                        () => void checkStatus(),
+                        STATUS_INTERVAL_MS
+                    );
+                    return;
+                }
+
+                statusInFlightRef.current = true;
+                const controller = new AbortController();
+                statusControllerRef.current = controller;
+
+                const timeoutId = setTimeout(
+                    () => controller.abort(),
+                    REQUEST_TIMEOUT_MS
+                );
+
+                let shouldContinue = true;
+
+                try {
+                    const token = getToken();
+                    if (!token) {
+                        throw new Error("Login token not found. Please sign in again.");
+                    }
+                    if (!apiUrl) {
+                        throw new Error("API configuration missing.");
+                    }
+
+                    const response = await fetch(
+                        `${apiUrl}/api/intent/get-intent-status/${encodeURIComponent(id)}`,
+                        {
+                            method: "GET",
+                            headers: { Authorization: `Bearer ${token}` },
+                            cache: "no-store",
+                            signal: controller.signal,
+                        }
+                    );
+
+                    const result = (await response.json().catch(() => ({}))) as ApiResult;
+
+                    if (!response.ok) {
+                        throw new Error(
+                            result.message ||
+                            `Status request failed (HTTP ${response.status}).`
+                        );
+                    }
+
+                    if (
+                        !mountedRef.current ||
+                        currentTxnIdRef.current !== id ||
+                        successHandledRef.current
+                    ) {
+                        return;
+                    }
+
+                    const customerDetails = findCustomerDetails(result);
+                    if (customerDetails) setCustomer(customerDetails);
+
+                    const status = findTransactionStatus(result);
+                    const responseMessage = String(result.message || "").toLowerCase();
+
+                    const scannerConfirmed =
+                        result.status === true &&
+                        Boolean(customerDetails) &&
+                        (responseMessage.includes("intent") ||
+                            responseMessage.includes("success"));
+
+                    const transactionConfirmed = [
+                        "success",
+                        "successful",
+                        "completed",
+                        "paid",
+                    ].includes(status);
+
+                    if (transactionConfirmed || scannerConfirmed) {
+                        successHandledRef.current = true;
+                        shouldContinue = false;
+                        setTransactionStatus("Success");
+                        setPaymentSuccess(true);
+                        setSuccessCountdown(10);
+                        setError("");
+                        setTxnId(findTransactionId(result) || id);
+                        setIsPolling(false);
+
+                        if (intentTimerRef.current) {
+                            clearInterval(intentTimerRef.current);
+                            intentTimerRef.current = null;
+                        }
+                        return;
+                    }
+
+                    if (
+                        [
+                            "failed",
+                            "failure",
+                            "error",
+                            "cancelled",
+                            "canceled",
+                            "expired",
+                        ].includes(status)
+                    ) {
+                        shouldContinue = false;
+                        setIsPolling(false);
+                        setTransactionStatus(status);
+                        setError(`Transaction ${status}. Please try again if needed.`);
+                        return;
+                    }
+
+                    setTransactionStatus(status || "Pending");
+                    setError("");
+                } catch (err) {
+                    if (
+                        mountedRef.current &&
+                        currentTxnIdRef.current === id &&
+                        !successHandledRef.current
+                    ) {
+                        setError(
+                            err instanceof Error
+                                ? err.name === "AbortError"
+                                    ? "Status request timed out. Retrying..."
+                                    : err.message
+                                : "Status check failed. Retrying..."
+                        );
+                    }
+                } finally {
+                    clearTimeout(timeoutId);
+
+                    if (statusControllerRef.current === controller) {
+                        statusControllerRef.current = null;
+                    }
+                    statusInFlightRef.current = false;
+
+                    if (
+                        shouldContinue &&
+                        mountedRef.current &&
+                        !successHandledRef.current &&
+                        currentTxnIdRef.current === id
+                    ) {
+                        statusTimerRef.current = setTimeout(
+                            () => void checkStatus(),
+                            STATUS_INTERVAL_MS
+                        );
+                    }
+                }
+            };
+
+            // First status request starts immediately for the new transaction.
+            void checkStatus();
         },
         [apiUrl]
     );
 
-    // Generate initial QR, then poll status every 10 seconds.
     useEffect(() => {
-        let cancelled = false;
-        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        mountedRef.current = true;
+        successHandledRef.current = false;
 
-        const scheduleNextCheck = (id: string) => {
-            if (cancelled || successHandled.current) return;
+        let disposed = false;
 
-            timeoutId = setTimeout(() => {
-                void checkStatus(id);
-            }, 3000);
-        };
-
-        const checkStatus = async (id: string): Promise<void> => {
-            if (cancelled || successHandled.current) return;
-
-            try {
-                const token = getToken();
-
-                if (!token) {
-                    throw new Error("Login token not found. Please sign in again.");
-                }
-
-                if (!apiUrl) {
-                    throw new Error("API configuration missing.");
-                }
-
-                const response = await fetch(
-                    `${apiUrl}/api/intent/get-intent-status/${encodeURIComponent(id)}`,
-                    {
-                        method: "GET",
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                        cache: "no-store",
-                    }
-                );
-
-                const result = (await response.json().catch(() => ({}))) as ApiResult;
-
-                if (!response.ok) {
-                    throw new Error(
-                        result.message ||
-                        `Status request failed (HTTP ${response.status}).`
-                    );
-                }
-
-                if (cancelled) return;
-
-                // Display customer details whenever the API provides them.
-                const customerDetails = findCustomerDetails(result);
-
-                if (customerDetails) {
-                    setCustomer(customerDetails);
-                }
-
-                const status = findTransactionStatus(result);
-
-                // Some scanner/status API responses confirm a successful scan by
-                // returning status:true with the customer details, even when they
-                // do not include a separate payment_status field.
-                const responseMessage = String(result.message || "").toLowerCase();
-                const scannerConfirmed =
-                    result.status === true &&
-                    Boolean(customerDetails) &&
-                    (responseMessage.includes("intent") || responseMessage.includes("success"));
-
-                const transactionConfirmed =
-                    ["success", "successful", "completed", "paid"].includes(status);
-
-                setTransactionStatus(
-                    transactionConfirmed || scannerConfirmed ? "Success" : status || "Pending"
-                );
-
-                // Open the success popup for an explicit transaction success, or
-                // the scanner's successful response containing customer details.
-                if (transactionConfirmed || scannerConfirmed) {
-                    successHandled.current = true;
-                    setIsPolling(false);
-                    setPaymentSuccess(true);
-                    setSuccessCountdown(10);
-                    setTransactionStatus("Success");
-                    setError("");
-
-                    const successfulTxnId = findTransactionId(result) || id;
-                    setTxnId(successfulTxnId);
-                    return;
-                }
-
-                if (
-                    [
-                        "failed",
-                        "failure",
-                        "error",
-                        "cancelled",
-                        "canceled",
-                        "expired",
-                    ].includes(status)
-                ) {
-                    setIsPolling(false);
-                    setTransactionStatus(status);
-                    setError(`Transaction ${status}. Please try again if needed.`);
-                    return;
-                }
-
-                // Pending / processing: check again in 10 seconds.
-                scheduleNextCheck(id);
-            } catch (err) {
-                if (cancelled) return;
-
-                setError(
-                    err instanceof Error ? err.message : "Status check failed."
-                );
-
-                // Retry transient request errors after 10 seconds.
-                scheduleNextCheck(id);
-            }
-        };
-
-        const start = async () => {
-            successHandled.current = false;
+        const initialize = async () => {
             setPaymentSuccess(false);
             setCustomer(null);
-            setIsPolling(false);
             setError("");
             setTransactionStatus("Preparing QR");
 
-            const initialDetails = await createIntent();
+            const initialIntent = await createIntent();
+            if (disposed || !mountedRef.current || !initialIntent) return;
 
-            if (cancelled || !initialDetails) return;
-
-            const id = initialDetails.txn_id || initialDetails.txn;
-
-            if (!id) {
+            const initialId = initialIntent.txn_id || initialIntent.txn;
+            if (!initialId) {
                 setTransactionStatus("Checking Status");
                 setError(
                     "Intent API response mein txn_id nahi mila. API response check karein."
                 );
-                return;
+            } else {
+                startStatusPolling(initialId);
             }
 
-            setTxnId(id);
-            setTransactionStatus("Pending");
-            setIsPolling(true);
+            // Request a fresh intent every 2 minutes, independently of status polling.
+            intentTimerRef.current = setInterval(async () => {
+                if (
+                    disposed ||
+                    !mountedRef.current ||
+                    successHandledRef.current ||
+                    intentInFlightRef.current
+                ) {
+                    return;
+                }
 
-            // First status request after 10 seconds.
-            scheduleNextCheck(id);
+                const newIntent = await createIntent();
+                if (disposed || !mountedRef.current || !newIntent) return;
+
+                const newId = newIntent.txn_id || newIntent.txn;
+                if (newId && newId !== currentTxnIdRef.current) {
+                    startStatusPolling(newId);
+                }
+            }, INTENT_INTERVAL_MS);
         };
 
-        void start();
+        void initialize();
 
         return () => {
-            cancelled = true;
+            disposed = true;
+            mountedRef.current = false;
 
-            if (timeoutId !== undefined) {
-                clearTimeout(timeoutId);
+            if (intentTimerRef.current) {
+                clearInterval(intentTimerRef.current);
+                intentTimerRef.current = null;
             }
+
+            if (statusTimerRef.current) {
+                clearTimeout(statusTimerRef.current);
+                statusTimerRef.current = null;
+            }
+
+            statusControllerRef.current?.abort();
+            statusControllerRef.current = null;
+            statusInFlightRef.current = false;
         };
-    }, [apiUrl, createIntent]);
+    }, [createIntent, startStatusPolling]);
 
-
-    // Keep the success popup visible for 10 seconds, then refresh the page automatically.
     useEffect(() => {
         if (!paymentSuccess) return;
 
         setSuccessCountdown(10);
         let remaining = 10;
+
         const intervalId = window.setInterval(() => {
             remaining -= 1;
             setSuccessCountdown(remaining);
@@ -500,7 +621,7 @@ export default function TransactionQR() {
 
                             <div className="mt-4 text-center">
                                 <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />  confirmed
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Confirmed
                                 </div>
                                 <h2 id="payment-success-title" className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
                                     Successful!
@@ -513,26 +634,10 @@ export default function TransactionQR() {
                             {customer && (
                                 <div className="mt-6 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50/60 p-4 text-left">
                                     <p className="mb-3 text-xs font-bold uppercase tracking-wider text-emerald-800">Customer details</p>
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100">
-                                            {customer.name.trim().charAt(0).toUpperCase() || "C"}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-xs text-slate-500">Customer name</p>
-                                            <p className="mt-0.5 break-words text-base font-bold text-slate-900">{customer.name}</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 flex items-center gap-3 border-t border-emerald-100 pt-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-100">
-                                            <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                                                <path d="M7.2 3.8h2.4l1.2 4-1.7 1.5a14 14 0 0 0 5.6 5.6l1.5-1.7 4 1.2v2.4a2 2 0 0 1-2.1 2A16.1 16.1 0 0 1 5.2 5.9a2 2 0 0 1 2-2.1Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                                            </svg>
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-xs text-slate-500">Mobile number</p>
-                                            <p className="mt-0.5 break-words text-sm font-semibold text-slate-900">{customer.mobile}</p>
-                                        </div>
-                                    </div>
+                                    <p className="text-xs text-slate-500">Customer name</p>
+                                    <p className="mt-0.5 break-words text-base font-bold text-slate-900">{customer.name}</p>
+                                    <p className="mt-3 text-xs text-slate-500">Mobile number</p>
+                                    <p className="mt-0.5 break-words text-sm font-semibold text-slate-900">{customer.mobile}</p>
                                 </div>
                             )}
 
@@ -543,28 +648,27 @@ export default function TransactionQR() {
                                 </div>
                             )}
 
-                            <div className="mt-5 rounded-2xl   text-white">
-
-                                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15">
-                                    <div className="h-full rounded-full bg-emerald-400 transition-all duration-1000" style={{ width: `${Math.max(0, Math.min(100, (successCountdown / 10) * 100))}%` }} />
-                                </div>
-
+                            <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                    className="h-full rounded-full bg-emerald-400 transition-all duration-1000"
+                                    style={{ width: `${Math.max(0, Math.min(100, (successCountdown / 10) * 100))}%` }}
+                                />
                             </div>
+                            <p className="mt-2 text-center text-xs text-slate-500">
+                                Refreshing in {successCountdown} seconds...
+                            </p>
                         </div>
                     </div>
                 </div>
             )}
-            {/* Right panel: live transaction QR and status logic. */}
+
             <section className="h-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                 <div className="flex items-start gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-2xl text-teal-700">
                         ▦
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold tracking-tight text-slate-950">
-                            Scan QR Code
-                        </h2>
-
+                        <h2 className="text-xl font-bold tracking-tight text-slate-950">Scan QR Code</h2>
                     </div>
                 </div>
 
@@ -578,9 +682,7 @@ export default function TransactionQR() {
                                     alt="Transaction QR code"
                                     className="h-[min(288px,75vw)] w-[min(288px,75vw)] object-contain sm:h-80 sm:w-80 lg:h-96 lg:w-96"
                                     onError={() =>
-                                        setError(
-                                            `QR image could not be loaded. Check the backend static path: ${qrImageUrl}`
-                                        )
+                                        setError(`QR image could not be loaded. Check the backend static path: ${qrImageUrl}`)
                                     }
                                 />
                             </div>
@@ -588,46 +690,23 @@ export default function TransactionQR() {
                             <div className="mt-3 w-full rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
                                 {paymentSuccess ? (
                                     <div className="text-center">
-                                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-700">
-                                            ✓
-                                        </div>
-                                        <h3 className="mt-3 text-lg font-bold text-emerald-700">
-                                            Successful!
-                                        </h3>
-                                        <p className="mt-1 text-sm text-slate-500">
-                                            Your transaction has been verified successfully.
-                                        </p>
-
-                                        {customer && (
-                                            <div className="mt-4 rounded-xl bg-emerald-50 p-3 text-left">
-                                                <p className="text-xs text-slate-500">Customer Name</p>
-                                                <p className="mt-1 break-words font-semibold text-slate-900">{customer.name}</p>
-                                                <p className="mt-3 text-xs text-slate-500">Mobile Number</p>
-                                                <p className="mt-1 font-semibold text-slate-900">{customer.mobile}</p>
-                                            </div>
-                                        )}
-
-
+                                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-700">✓</div>
+                                        <h3 className="mt-3 text-lg font-bold text-emerald-700">Successful!</h3>
+                                        <p className="mt-1 text-sm text-slate-500">Your transaction has been verified successfully.</p>
                                     </div>
                                 ) : (
                                     <>
                                         <p className="text-xs font-medium text-slate-500">Current status</p>
                                         <div className={`mt-1.5 flex items-center gap-2 rounded-xl px-3 py-2 ${["success", "successful", "completed", "paid"].includes(transactionStatus.toLowerCase())
                                             ? "bg-emerald-50 text-emerald-800"
-                                            : ["failed", "failure"].includes(transactionStatus.toLowerCase())
+                                            : ["failed", "failure", "error"].includes(transactionStatus.toLowerCase())
                                                 ? "bg-rose-50 text-rose-800"
                                                 : "bg-amber-50 text-amber-950"
                                             }`}>
-                                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${["success", "successful", "completed", "paid"].includes(transactionStatus.toLowerCase())
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
-                                                }`}>◷</span>
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">◷</span>
                                             <span className="font-bold">
-                                                {customer ? "Success" : getFriendlyStatus(transactionStatus, isPolling, loading)}
+                                                {getFriendlyStatus(transactionStatus, isPolling, loading)}
                                             </span>
-                                            {/* {(isPolling || loading) && (
-                                                <span className="ml-auto h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-800" />
-                                            )} */}
                                         </div>
 
                                         {customer && (
@@ -639,19 +718,21 @@ export default function TransactionQR() {
                                             </div>
                                         )}
 
-                                        <p className="mt-2 text-center text-xs text-slate-400">
-                                            Please do not close this page.
-                                        </p>
-
+                                        {txnId && (
+                                            <p className="mt-2 break-all text-center text-xs text-slate-400">
+                                                Transaction ID: {txnId}
+                                            </p>
+                                        )}
+                                        <p className="mt-2 text-center text-xs text-slate-400">Please do not close this page.</p>
                                     </>
                                 )}
+
+
                             </div>
                         </div>
                     ) : (
                         <div className="flex min-h-[360px] flex-col items-center justify-center px-4 text-center">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-3xl text-teal-700 shadow-sm ring-1 ring-slate-200">
-                                ▦
-                            </div>
+                            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-3xl text-teal-700 shadow-sm ring-1 ring-slate-200">▦</div>
                             <p className="mt-5 text-base font-semibold text-slate-900">
                                 {loading ? "Generating your QR..." : "Preparing QR code"}
                             </p>
@@ -662,6 +743,9 @@ export default function TransactionQR() {
                             </p>
                             {loading && (
                                 <div className="mt-5 h-6 w-6 animate-spin rounded-full border-2 border-teal-200 border-t-teal-700" />
+                            )}
+                            {error && (
+                                <p role="alert" className="mt-3 break-words text-sm text-rose-600">{error}</p>
                             )}
                         </div>
                     )}

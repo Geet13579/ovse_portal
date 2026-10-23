@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
+import Image from "next/image";
 import PlayStoreQR from "./PlayStoreQR";
 import TransactionQR from "./TransactionQR";
 import { authorizedFetch, getAdminToken } from "@/app/lib/api-client";
@@ -56,6 +56,19 @@ export default function QRCodePage() {
                 {/* Header */}
                 <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
+
+
+                        <Image
+                            src="/chips-logo.png"
+                            alt="Logo"
+                            width={72}
+                            height={72}
+                            className="object-contain"
+                        />
+
+                    </div>
+
+                    <div>
                         <p className="text-xs font-bold uppercase tracking-[0.22em] text-teal-700">
                             User Portal / Secure Access
                         </p>
@@ -66,7 +79,6 @@ export default function QRCodePage() {
                         </h1>
 
                     </div>
-
                     <Link
                         href="/user"
                         className="inline-flex min-h-12 w-fit items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
