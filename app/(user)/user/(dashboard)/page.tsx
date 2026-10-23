@@ -249,8 +249,8 @@ export default function UserDashboardPage() {
       </section>
 
       {/* Weekly visitor graph */}
-      <section className={`${card} p-5`}>
-        <div className="flex items-center justify-between gap-3">
+      <section className={`rounded-xl border  border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 p-5`}>
+        <div className="flex  items-center justify-between gap-3">
           <div>
             <h2 className="font-semibold">Visitor Graph</h2>
 

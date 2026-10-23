@@ -667,7 +667,9 @@ export default function VisitorInOutDetailsPage() {
                                                 <p className="break-words text-sm font-bold leading-5 text-slate-900">
                                                     {getVisitorName(row)}
                                                 </p>
-
+                                                <p className="break-words text-xs mt-1 leading-5 text-slate-900 dark:text-slate-100">
+                                                    {getVisitorMobile(row)}
+                                                </p>
                                                 <p className="mt-1 break-all text-xs text-slate-500">
                                                     Gender
                                                 </p>
