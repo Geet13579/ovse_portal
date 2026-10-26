@@ -9,66 +9,92 @@ import PasswordInput from "@/components/ui/PasswordInput";
 import Button from "@/components/ui/Button";
 import FormField from "@/components/ui/FormField";
 import LoginCard from "@/components/ui/LoginCard";
+import { saveAdminToken } from "@/app/lib/api-client";
 
+
+type LoginResponse = {
+    token?: string;
+    accessToken?: string;
+    access_token?: string;
+    data?: {
+        token?: string;
+        accessToken?: string;
+        access_token?: string;
+        role?: string;
+    };
+    error?: string;
+    message?: string;
+    status?: boolean;
+};
 export default function AttendanceAdminLogin() {
     const router = useRouter();
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    async function handleLogin(e: FormEvent<HTMLFormElement>) {
-        e.preventDefault();
+
+
+    async function handleLogin(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (loading) return;
 
         setError("");
         setLoading(true);
 
-        const formData = new FormData(e.currentTarget);
-
-        const email = String(formData.get("email") ?? "")
-            .trim()
-            .toLowerCase();
-
+        const formData = new FormData(event.currentTarget);
+        const username = String(formData.get("username") ?? "").trim();
         const password = String(formData.get("password") ?? "");
 
         try {
-            const response = await fetch("/api/auth/login", {
+            const apiUrl = process.env.NEXT_PUBLIC_API_ATTENDANCE_URL;
+            if (!apiUrl) {
+                throw new Error("API URL is not configured.");
+            }
+
+            // Same login endpoint and request payload as Admin Login.
+            const response = await fetch(`${apiUrl}/api/v2/employee-login`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                credentials: "include",
-                body: JSON.stringify({ username: email, password }),
+                body: JSON.stringify({ username, paas: password }),
             });
 
-            const data = await response.json();
+            const data: LoginResponse = await response.json().catch(() => ({}));
 
-            if (!response.ok || !data.success) {
-                throw new Error(data.message || "Login failed");
+            if (!response.ok || data.status === false) {
+                setError(data.error || data.message || "Invalid ID or password.");
+                return;
             }
 
-            sessionStorage.setItem("access_token", data.token);
-            window.location.href = "/dashboard";
+            const token =
+                data.token ??
+                data.accessToken ??
+                data.access_token ??
+                data.data?.token ??
+                data.data?.accessToken ??
+                data.data?.access_token;
 
-
-            if (!response.ok) {
-                throw new Error(
-                    data.message || data.error || "Invalid email or password."
-                );
+            if (typeof token !== "string" || !token.trim()) {
+                setError("Login response mein token nahi mila. API response check karo.");
+                return;
             }
 
-            // API should set an HttpOnly session cookie.
-            router.replace("/attendance/dashboard");
-            router.refresh();
-        } catch (err: unknown) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Server se connect nahi ho pa raha hai."
-            );
+            saveAdminToken(token);
+
+            window.location.href = "/attendance-admin-login";
+
+
+
+
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Something went wrong.");
         } finally {
             setLoading(false);
         }
     }
+
+
 
     return (
         <LoginCard
@@ -79,17 +105,17 @@ export default function AttendanceAdminLogin() {
         >
             <form onSubmit={handleLogin} className="space-y-5">
                 <FormField
-                    label="Email ID"
-                    htmlFor="attendance-admin-email"
+                    label="Username"
+                    htmlFor="attendance-admin-username"
                     required
                 >
                     <Input
                         theme="attendance"
-                        id="attendance-admin-email"
-                        name="email"
-                        type="email"
+                        id="attendance-admin-username"
+                        name="username"
+                        type="text"
                         autoComplete="username"
-                        placeholder="Enter your email ID"
+                        placeholder="Enter Username"
                         required
                     />
                 </FormField>
