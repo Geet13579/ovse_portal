@@ -71,7 +71,7 @@ function formatDateTime(value?: string | null) {
 }
 
 function getDuration(start?: string | null, end?: string | null) {
-    if (!start || !end) return "—";
+    if (!start || !end) return <p className="text-center">- - -</p>
 
     const startTime = new Date(start).getTime();
     const endTime = new Date(end).getTime();
@@ -81,7 +81,7 @@ function getDuration(start?: string | null, end?: string | null) {
         Number.isNaN(endTime) ||
         endTime < startTime
     ) {
-        return "—";
+        return "— - -";
     }
 
     const totalSeconds = Math.floor((endTime - startTime) / 1000);
@@ -106,8 +106,8 @@ function getVisitorMobile(row: VisitRecord) {
 }
 
 function getVisitStatus(row: VisitRecord) {
-    if (row.out?.created_at) return "Completed";
-    if (row.in?.created_at) return "Inside";
+    if (row.out?.created_at) return "Visit Completed";
+    if (row.in?.created_at) return "Visitor Inside";
     return "Unknown";
 }
 
@@ -226,8 +226,8 @@ function ActivityCard({
             >
                 {isCurrent ? (
                     <div className="py-2">
-                        <p className="text-xs font-bold text-amber-700">
-                            Currently Inside
+                        <p className="text-xs text-center font-bold text-amber-700">
+                            - - -
                         </p>
 
                     </div>
@@ -244,7 +244,7 @@ function ActivityCard({
 
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                             <span className="text-[10px] text-slate-500">
-                                Status:
+                                Auth. status:
                             </span>
 
                             <StatusBadge

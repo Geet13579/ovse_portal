@@ -47,7 +47,7 @@ const CLAIMS = [
     "maskedMobile",
     "email",
     "maskedEmail",
-    "claim41",
+    "notDefined",
     "maskedAadhaar",
 ];
 
@@ -57,7 +57,7 @@ const inputClass =
 function generateUserScope(selected: number[]): string {
     const selectedSet = new Set(selected);
 
-    return Array.from({ length: 42 }, (_, index) =>
+    return Array.from({ length: CLAIMS.length }, (_, index) =>
         selectedSet.has(index + 1) ? "1" : "0"
     ).join("");
 }
@@ -68,6 +68,7 @@ export default function CreateUserPage() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [premisesAddress, setPremisesAddress] = useState("");
     const [selectedClaims, setSelectedClaims] = useState<number[]>([
         6, 8, 12, 42,
     ]);
@@ -107,6 +108,10 @@ export default function CreateUserPage() {
             setError("Password is required.");
             return;
         }
+        if (!premisesAddress) {
+            setError("Premises address is required.");
+            return;
+        }
 
         if (selectedClaims.length === 0) {
             setError("Please select at least one claim.");
@@ -121,12 +126,16 @@ export default function CreateUserPage() {
                 email: email.trim(),
                 password,
                 user_scope: userScope,
+                premises_addr: premisesAddress,
             };
 
-            const response = await authorizedFetch("/api/admin/register", {
-                method: "POST",
-                body: JSON.stringify(payload),
-            });
+            const response = await authorizedFetch(
+                "/api/admin/register",
+                {
+                    method: "POST",
+                    body: JSON.stringify(payload),
+                }
+            );
 
             const result = await response.json().catch(() => null);
 
@@ -144,7 +153,9 @@ export default function CreateUserPage() {
             router.refresh();
         } catch (err) {
             setError(
-                err instanceof Error ? err.message : "Unable to create user."
+                err instanceof Error
+                    ? err.message
+                    : "Unable to create user."
             );
         } finally {
             setSaving(false);
@@ -156,13 +167,15 @@ export default function CreateUserPage() {
             <div className="mx-auto max-w-5xl space-y-6">
                 <header>
                     <Link
-                        href="/ovse"
+                        href="/ovse/users"
                         className="text-sm text-blue-600 hover:underline"
                     >
                         ← Back to Users
                     </Link>
 
-                    <h1 className="mt-4 text-2xl font-bold">Create User</h1>
+                    <h1 className="mt-4 text-2xl font-bold">
+                        Create User
+                    </h1>
 
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                         Enter user details and select their access claims.
@@ -175,7 +188,10 @@ export default function CreateUserPage() {
                 >
                     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <label htmlFor="name" className="mb-1.5 block text-sm font-medium">
+                            <label
+                                htmlFor="name"
+                                className="mb-1.5 block text-sm font-medium"
+                            >
                                 Name
                             </label>
                             <input
@@ -192,24 +208,49 @@ export default function CreateUserPage() {
                         </div>
 
                         <div>
-                            <label htmlFor="email" className="mb-1.5 block text-sm font-medium">
-                                Email
+                            <label
+                                htmlFor="email"
+                                className="mb-1.5 block text-sm font-medium"
+                            >
+                                Username
                             </label>
                             <input
                                 id="email"
                                 name="email"
-                                type="email"
-                                autoComplete="email"
+                                type="text"
+                                autoComplete="username"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Enter email address"
+                                placeholder="Enter Username"
                                 className={inputClass}
                             />
                         </div>
 
-                        <div className="sm:col-span-2">
-                            <label htmlFor="password" className="mb-1.5 block text-sm font-medium">
+                        <div>
+                            <label
+                                htmlFor="premises-address"
+                                className="mb-1.5 block text-sm font-medium"
+                            >
+                                Premises Address
+                            </label>
+                            <input
+                                id="premises-address"
+                                name="premises-address"
+                                type="text"
+                                autoComplete="premises-address"
+                                required
+                                value={premisesAddress}
+                                onChange={(e) => setPremisesAddress(e.target.value)}
+                                placeholder="Enter Premises Address"
+                                className={inputClass}
+                            />
+                        </div>
+                        <div className="">
+                            <label
+                                htmlFor="password"
+                                className="mb-1.5 block text-sm font-medium"
+                            >
                                 Password
                             </label>
                             <input
@@ -228,7 +269,9 @@ export default function CreateUserPage() {
 
                     <section className="space-y-3">
                         <div className="flex items-center justify-between gap-3">
-                            <h2 className="font-semibold">Bit Map Selection</h2>
+                            <h2 className="font-semibold">
+                                Bit Map Selection
+                            </h2>
                             <span className="text-sm text-slate-500">
                                 {selectedClaims.length} selected
                             </span>
@@ -246,11 +289,18 @@ export default function CreateUserPage() {
                                         <input
                                             type="checkbox"
                                             checked={selectedClaims.includes(id)}
-                                            onChange={(e) => toggleClaim(id, e.target.checked)}
+                                            onChange={(e) =>
+                                                toggleClaim(
+                                                    id,
+                                                    e.target.checked
+                                                )
+                                            }
                                             className="mt-0.5 accent-blue-600"
                                         />
                                         <span className="break-words">
-                                            <span className="mr-1 font-semibold">{id}.</span>
+                                            <span className="mr-1 font-semibold">
+                                                {id}.
+                                            </span>
                                             {claim}
                                         </span>
                                     </label>
@@ -261,7 +311,9 @@ export default function CreateUserPage() {
 
                     <section className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
                         <div className="mb-2 flex justify-between gap-2">
-                            <span className="text-sm font-semibold">user_scope</span>
+                            <span className="text-sm font-semibold">
+                                user_scope
+                            </span>
                             <span className="text-xs text-slate-500">
                                 {userScope.length} bits
                             </span>
@@ -292,7 +344,7 @@ export default function CreateUserPage() {
 
                     <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 dark:border-slate-800 sm:flex-row sm:justify-end">
                         <Link
-                            href="/ovse"
+                            href="/ovse/users"
                             className="rounded-lg border border-slate-300 px-5 py-2.5 text-center text-sm font-semibold dark:border-slate-700"
                         >
                             Cancel

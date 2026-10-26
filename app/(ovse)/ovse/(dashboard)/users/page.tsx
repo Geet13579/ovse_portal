@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -16,6 +15,7 @@ type SortKey =
   | "id"
   | "name"
   | "email"
+  | "premises_addr"
   | "role"
   | "user_scope"
   | "is_active"
@@ -66,49 +66,27 @@ const CLAIMS = [
   "maskedMobile",
   "email",
   "maskedEmail",
-  "claim41",
+  "notDefined",
   "maskedAadhaar",
 ];
 
 function makeBitmap(selected: number[]) {
   const selectedSet = new Set(selected);
-
-  return Array.from({ length: 42 }, (_, index) =>
+  return Array.from({ length: CLAIMS.length }, (_, index) =>
     selectedSet.has(index + 1) ? "1" : "0"
   ).join("");
 }
 
 function parseBitmap(value: ApiUser["user_scope"]): number[] {
-  const bitmap = String(value ?? "");
+  const bitmap = String(value ?? "").slice(-CLAIMS.length);
+  const offset = CLAIMS.length - bitmap.length;
 
-  return Array.from(bitmap)
-    .slice(-42)
-    .flatMap((bit, index) => (bit === "1" ? [index + 1] : []));
+  return Array.from(bitmap).flatMap((bit, index) =>
+    bit === "1" ? [offset + index + 1] : []
+  );
 }
 
-function activeLabel(value: ApiUser["is_active"]) {
-  if (value === true || value === 1) {
-    return {
-      label: "Active",
-      className:
-        "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-    };
-  }
 
-  if (value === false || value === 0) {
-    return {
-      label: "Inactive",
-      className:
-        "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-    };
-  }
-
-  return {
-    label: "Unknown",
-    className:
-      "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  };
-}
 
 export default function UsersPage() {
   const [users, setUsers] = useState<ApiUser[]>([]);
@@ -126,6 +104,8 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editPremisesAddress, setEditPremisesAddress] = useState("");
+  const [editPassword, setEditPassword] = useState("");
   const [editClaims, setEditClaims] = useState<number[]>([]);
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -141,9 +121,7 @@ export default function UsersPage() {
       setUsers(result);
       setRefreshedAt(new Date().toLocaleTimeString());
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not load users."
-      );
+      setError(err instanceof Error ? err.message : "Could not load users.");
     } finally {
       setLoading(false);
     }
@@ -163,6 +141,8 @@ export default function UsersPage() {
         String(user.id),
         String(user.role ?? ""),
         displayScope(user.user_scope),
+
+        user.premises_addr,
       ];
 
       const matchesQuery =
@@ -201,7 +181,6 @@ export default function UsersPage() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-
   const rows = filtered.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
@@ -216,7 +195,6 @@ export default function UsersPage() {
         key === "created_at" || key === "updated_at" ? "desc" : "asc"
       );
     }
-
     setPage(1);
   }
 
@@ -224,6 +202,9 @@ export default function UsersPage() {
     setEditingUser(user);
     setEditName(user.name || "");
     setEditEmail(user.email || "");
+    setEditPremisesAddress(user.premises_addr || "");
+    // Never prefill a password. Blank means "do not change password".
+    setEditPassword("");
     setEditClaims(parseBitmap(user.user_scope));
     setActionError("");
     setActionSuccess("");
@@ -239,7 +220,6 @@ export default function UsersPage() {
 
   async function handleUpdate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (!editingUser || actionLoading) return;
 
     if (editName.trim().length < 2) {
@@ -262,19 +242,38 @@ export default function UsersPage() {
     setActionSuccess("");
 
     try {
-      await updateAdminUser(editingUser.id, {
+      const payload: {
+        name: string;
+        email: string;
+        user_scope: string;
+        premises_addr: string;
+        password?: string;
+      } = {
         name: editName.trim(),
         email: editEmail.trim(),
         user_scope: makeBitmap(editClaims),
-      });
+        premises_addr: editPremisesAddress.trim(),
+      };
+
+      // Only send password when the admin entered a new one.
+      if (editPassword.length > 0) {
+        payload.password = editPassword;
+      }
+
+      await updateAdminUser(editingUser.id, payload);
 
       setEditingUser(null);
+      setEditPassword("");
       setActionSuccess("User updated successfully.");
+
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setActionSuccess("");
+      }, 5000);
+
       await loadUsers();
     } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not update user."
-      );
+      setActionError(err instanceof Error ? err.message : "Could not update user.");
     } finally {
       setActionLoading(false);
     }
@@ -286,7 +285,6 @@ export default function UsersPage() {
     const confirmed = window.confirm(
       `Are you sure you want to delete ${user.name || user.email}?`
     );
-
     if (!confirmed) return;
 
     setActionLoading(true);
@@ -298,9 +296,7 @@ export default function UsersPage() {
       setActionSuccess("User deleted successfully.");
       await loadUsers();
     } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not delete user."
-      );
+      setActionError(err instanceof Error ? err.message : "Could not delete user.");
     } finally {
       setActionLoading(false);
     }
@@ -315,9 +311,7 @@ export default function UsersPage() {
         key: "id",
         label: "ID",
         render: (u) => (
-          <span className="font-mono text-xs text-slate-500">
-            #{u.id}
-          </span>
+          <span className="font-mono text-xs text-slate-500">#{u.id}</span>
         ),
       },
       {
@@ -331,9 +325,16 @@ export default function UsersPage() {
       },
       {
         key: "email",
-        label: "Email",
+        label: "Username",
+        render: (u) => <span className="break-all">{u.email || "—"}</span>,
+      },
+      {
+        key: "premises_addr",
+        label: "Premises Address",
         render: (u) => (
-          <span className="break-all">{u.email || "—"}</span>
+          <span className="inline-block max-w-[260px] break-words">
+            {u.premises_addr || "—"}
+          </span>
         ),
       },
       {
@@ -357,21 +358,7 @@ export default function UsersPage() {
           </span>
         ),
       },
-      {
-        key: "is_active",
-        label: "Status",
-        render: (u) => {
-          const status = activeLabel(u.is_active);
 
-          return (
-            <span
-              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${status.className}`}
-            >
-              {status.label}
-            </span>
-          );
-        },
-      },
       {
         key: "created_at",
         label: "Created at",
@@ -381,23 +368,24 @@ export default function UsersPage() {
           </span>
         ),
       },
-
     ];
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 dark:bg-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1600px] space-y-5">
-        {/* Header */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Users
             </h1>
-
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Manage registered users and their access permissions.
             </p>
+            {refreshedAt && (
+              <p className="mt-1 text-xs text-slate-400">
+                Last refreshed: {refreshedAt}
+              </p>
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -434,7 +422,6 @@ export default function UsersPage() {
           </div>
         </header>
 
-        {/* Notifications */}
         {error && (
           <div
             role="alert"
@@ -470,10 +457,8 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Users list */}
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          {/* Search and filters */}
-          <div className="grid grid-cols-1 gap-3 border-b border-slate-200 p-4 dark:border-slate-800 md:grid-cols-[minmax(0,1fr)_190px_auto] md:items-center">
+          <div className="grid grid-cols-1 gap-3 border-b border-slate-200 p-4 dark:border-slate-800 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
             <div className="relative">
               <svg
                 viewBox="0 0 24 24"
@@ -486,7 +471,6 @@ export default function UsersPage() {
                 <circle cx="11" cy="11" r="7" />
                 <path strokeLinecap="round" d="m16 16 4 4" />
               </svg>
-
               <input
                 className={`${inputClass} pl-9`}
                 value={query}
@@ -494,38 +478,19 @@ export default function UsersPage() {
                   setQuery(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Search name, email, ID or bitmask..."
+                placeholder="Search name, email, ID, address or bitmask..."
                 aria-label="Search users"
               />
             </div>
-            {/* 
-            <select
-              className={inputClass}
-              value={active}
-              onChange={(e) => {
-                setActive(e.target.value);
-                setPage(1);
-              }}
-              
-              aria-label="Filter by status"
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select> */}
-
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm md:justify-end">
               <span className="font-semibold text-slate-700 dark:text-slate-200">
                 {filtered.length} users
               </span>
-
-
             </div>
           </div>
 
-          {/* Table */}
           <div className="w-full overflow-x-auto">
-            <table className="w-full min-w-[1000px] table-auto text-left text-sm">
+            <table className="w-full min-w-[1200px] table-auto text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
                 <tr>
                   {columns.map((col) => (
@@ -575,12 +540,11 @@ export default function UsersPage() {
                       {columns.map((col) => (
                         <td
                           key={col.key}
-                          className="max-w-[260px] px-4 py-4 align-middle text-slate-600 dark:text-slate-300"
+                          className="max-w-[280px] px-4 py-4 align-middle text-slate-600 dark:text-slate-300"
                         >
                           {col.render(user)}
                         </td>
                       ))}
-
                       <td className="whitespace-nowrap px-4 py-4 align-middle">
                         <div className="flex items-center gap-2">
                           <button
@@ -591,7 +555,6 @@ export default function UsersPage() {
                           >
                             Edit
                           </button>
-
                           <button
                             type="button"
                             onClick={() => void handleDelete(user)}
@@ -615,7 +578,7 @@ export default function UsersPage() {
                         No users found
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        Try another search or change the status filter.
+                        Try another search.
                       </p>
                     </td>
                   </tr>
@@ -624,7 +587,6 @@ export default function UsersPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           <footer className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3.5 text-sm text-slate-500 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <span>
@@ -636,7 +598,6 @@ export default function UsersPage() {
                   : "0"}{" "}
                 of {filtered.length}
               </span>
-
               <label className="flex items-center gap-2">
                 Rows
                 <select
@@ -655,7 +616,6 @@ export default function UsersPage() {
                 </select>
               </label>
             </div>
-
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -665,11 +625,9 @@ export default function UsersPage() {
               >
                 Previous
               </button>
-
               <span className="min-w-[85px] text-center text-sm">
                 Page {currentPage} / {totalPages}
               </span>
-
               <button
                 type="button"
                 disabled={currentPage >= totalPages}
@@ -682,26 +640,36 @@ export default function UsersPage() {
           </footer>
         </section>
 
-        {/* Edit modal */}
         {editingUser && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="my-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm"
+            role="presentation"
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-user-title"
+              className="my-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+            >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                  <h2
+                    id="edit-user-title"
+                    className="text-xl font-bold text-slate-900 dark:text-white"
+                  >
                     Edit User
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
                     User ID: {editingUser.id}
                   </p>
                 </div>
-
                 <button
                   type="button"
                   disabled={actionLoading}
                   onClick={() => {
                     setEditingUser(null);
                     setActionError("");
+                    setEditPassword("");
                   }}
                   aria-label="Close edit dialog"
                   className="rounded-lg px-3 py-2 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -734,16 +702,52 @@ export default function UsersPage() {
                       htmlFor="edit-email"
                       className="mb-1.5 block text-sm font-semibold"
                     >
-                      Email
+                      Username
                     </label>
                     <input
                       id="edit-email"
-                      type="email"
+                      type="text"
                       required
                       value={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
                       className={inputClass}
                     />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="edit-premises-address"
+                      className="mb-1.5 block text-sm font-semibold"
+                    >
+                      Premises Address
+                    </label>
+                    <input
+                      id="edit-premises-address"
+                      type="text"
+                      value={editPremisesAddress}
+                      onChange={(e) => setEditPremisesAddress(e.target.value)}
+                      placeholder="Enter premises address"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="edit-password"
+                      className="mb-1.5 block text-sm font-semibold"
+                    >
+                      New Password
+                    </label>
+                    <input
+                      id="edit-password"
+                      type="password"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder="Enter New Password"
+                      autoComplete="new-password"
+                      className={inputClass}
+                    />
+
                   </div>
                 </div>
 
@@ -760,7 +764,6 @@ export default function UsersPage() {
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                     {CLAIMS.map((claim, index) => {
                       const id = index + 1;
-
                       return (
                         <label
                           key={id}
@@ -769,9 +772,7 @@ export default function UsersPage() {
                           <input
                             type="checkbox"
                             checked={editClaims.includes(id)}
-                            onChange={(e) =>
-                              toggleClaim(id, e.target.checked)
-                            }
+                            onChange={(e) => toggleClaim(id, e.target.checked)}
                             className="mt-0.5 accent-blue-600"
                           />
                           <span className="break-words text-slate-600 dark:text-slate-300">
@@ -809,12 +810,12 @@ export default function UsersPage() {
                     onClick={() => {
                       setEditingUser(null);
                       setActionError("");
+                      setEditPassword("");
                     }}
                     className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>
-
                   <button
                     type="submit"
                     disabled={actionLoading}

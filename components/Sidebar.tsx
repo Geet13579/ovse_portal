@@ -68,18 +68,19 @@ const ROLE_CONFIG = {
     email: "user@example.com",
     theme: "user",
     nav: [
-      { label: "Dashboard", href: "/user", icon: "home" },
-      {
-        label: "Visitor Details",
-        href: "/user/intent-request-list",
-        icon: "users",
-      },
+      // { label: "Dashboard", href: "/user", icon: "home" },
       {
         label: "QR Page",
         href: "/user/intent-request",
         icon: "users",
       },
-      { label: "Settings", href: "/user/settings", icon: "cog" },
+      {
+        label: "Visitor Details",
+        href: "/user/intent-request-list",
+        icon: "users",
+      },
+
+      // { label: "Settings", href: "/user/settings", icon: "cog" },
     ],
   },
 } satisfies Record<string, RoleConfig>;
@@ -196,11 +197,12 @@ export default function Sidebar({
       await fetch("/api/logout", { method: "POST" });
     } finally {
       router.push(
-        role === "attendance"
-          ? "/attendance-admin-login"
-          : role === "user"
-            ? "/user-login"
-            : "/ovse-login"
+        "/"
+        // role === "attendance"
+        //   ? "/attendance-admin-login"
+        //   : role === "user"
+        //     ? "/user-login"
+        //     : "/ovse-login"
       );
 
       router.refresh();
@@ -260,10 +262,46 @@ export default function Sidebar({
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+
           {config.nav.map((item) => {
             const active =
               pathname === item.href ||
               pathname.startsWith(`${item.href}/`);
+
+            const className = `flex items-center gap-3 rounded-xl px-3 py-3
+    text-sm font-medium transition-colors
+    ${active
+                ? theme.sidebarActive
+                : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              }`;
+
+            const content = (
+              <>
+                <Icon
+                  name={item.icon}
+                  className={`h-5 w-5 ${active ? theme.sidebarIcon : ""
+                    }`}
+                />
+                {item.label}
+              </>
+            );
+
+            if (
+              role === "user" &&
+              item.href === "/user/intent-request"
+            ) {
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  aria-current={active ? "page" : undefined}
+                  className={className}
+                >
+                  {content}
+                </a>
+              );
+            }
 
             return (
               <Link
@@ -271,23 +309,13 @@ export default function Sidebar({
                 href={item.href}
                 onClick={() => setOpen(false)}
                 aria-current={active ? "page" : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-3
-                  text-sm font-medium transition-colors
-                  ${active
-                    ? theme.sidebarActive
-                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                  }`}
+                className={className}
               >
-                <Icon
-                  name={item.icon}
-                  className={`h-5 w-5 ${active ? theme.sidebarIcon : ""
-                    }`}
-                />
-
-                {item.label}
+                {content}
               </Link>
             );
           })}
+
         </nav>
 
         {/* Logged-in profile and role badge */}

@@ -6,6 +6,7 @@ export type ApiUser = {
   name: string;
   email: string;
   role?: string | null;
+  premises_addr: string
   user_scope?: string | number | null;
   is_active?: boolean | number | null;
   created_at?: string | null;

@@ -25,6 +25,8 @@ type IntentDetails = {
 type CustomerDetails = {
     name: string;
     mobile: string;
+    gender: string;
+    visit_status: string
 };
 
 function getToken(): string | null {
@@ -101,6 +103,9 @@ function findCustomerDetails(value: unknown): CustomerDetails | null {
         return {
             name: obj.name.trim(),
             mobile: String(obj.mobile),
+            gender: String(obj.gender),
+            visit_status: String(obj.visit_status),
+
         };
     }
 
@@ -173,32 +178,12 @@ function findTransactionStatus(value: unknown): string {
     return "";
 }
 
-function getFriendlyStatus(
-    status: string,
-    polling: boolean,
-    loading: boolean
-): string {
-    const normalized = status.trim().toLowerCase();
-
-    if (["success", "successful", "completed", "paid"].includes(normalized))
-        return "Success";
-    if (["failed", "failure", "error"].includes(normalized))
-        return "Payment Failed";
-    if (normalized === "expired") return "QR Expired";
-    if (["cancelled", "canceled"].includes(normalized))
-        return "Payment Cancelled";
-    if (["processing", "in_process", "in progress"].includes(normalized))
-        return "Processing Payment";
-    if (loading && !polling) return "Preparing QR Code";
-    if (polling) return "Pending";
-    return "Checking Status";
-}
 
 const INTENT_INTERVAL_MS = 120_000; // 2 minutes
 const STATUS_INTERVAL_MS = 3_000; // 3 seconds
 const REQUEST_TIMEOUT_MS = 8_000; // 8 seconds
 
-export default function TransactionQR() {
+export default function TransactionQR({ premises_name }: any) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [details, setDetails] = useState<IntentDetails | null>(null);
@@ -605,152 +590,239 @@ export default function TransactionQR() {
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="payment-success-title"
-                    className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm"
+                    className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-md"
                 >
-                    <div className="relative my-auto w-full max-w-md overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-2xl shadow-emerald-950/20">
-                        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-br from-emerald-100 via-teal-50 to-white" />
-                        <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full border-[18px] border-emerald-200/40" />
-                        <div className="absolute -left-8 top-16 h-16 w-16 rounded-full bg-teal-100/60 blur-sm" />
+                    <div className="relative my-auto w-full max-w-[560px] overflow-hidden rounded-[1.75rem] border border-white/70 bg-white shadow-2xl shadow-emerald-950/20">
+                        {/* Decorative background */}
+                        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-br from-emerald-100 via-teal-50 to-white" />
+                        <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full border-[14px] border-emerald-200/40" />
+                        <div className="absolute -left-10 top-24 h-24 w-24 rounded-full bg-teal-100/60 blur-xl" />
 
-                        <div className="relative px-6 pb-6 pt-8 sm:px-8 sm:pb-8">
-                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-emerald-500 text-white shadow-lg shadow-emerald-200">
-                                <svg viewBox="0 0 24 24" fill="none" className="h-10 w-10" aria-hidden="true">
-                                    <path d="m5 12.5 4.3 4.3L19.5 6.8" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
+                        <div className="relative px-5 pb-7 pt-7 sm:px-8 sm:pb-8 sm:pt-8">
+                            {/* Success icon with confetti */}
+                            <div className="relative mx-auto flex h-28 w-28 items-center justify-center">
+                                <div className="absolute inset-0 rounded-full border-[12px] border-emerald-100/80" />
+                                <span className="absolute left-0 top-5 h-2.5 w-4 rotate-45 rounded-sm bg-emerald-500" />
+                                <span className="absolute right-0 top-4 h-2.5 w-4 -rotate-12 rounded-sm bg-sky-500" />
+                                <span className="absolute left-5 top-0 h-2.5 w-3 -rotate-45 rounded-sm bg-amber-400" />
+                                <span className="absolute bottom-5 right-0 h-2.5 w-4 rotate-45 rounded-sm bg-emerald-500" />
+                                <span className="absolute left-1 top-14 text-base text-amber-400">✦</span>
+                                <span className="absolute right-1 top-12 text-base text-amber-400">✦</span>
+                                <span className="absolute bottom-2 right-5 text-xs text-teal-400">✦</span>
+                                <div className="relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-200/80">
+                                    <svg viewBox="0 0 24 24" fill="none" className="h-10 w-10" aria-hidden="true">
+                                        <path d="m5 12.5 4.3 4.3L19.5 6.8" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </div>
                             </div>
 
-                            <div className="mt-4 text-center">
-                                <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Confirmed
+                            {/* Success heading */}
+                            <div className="mt-3 text-center">
+                                <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 sm:text-xs">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                    Verified successfully
                                 </div>
-                                <h2 id="payment-success-title" className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                                    Successful!
-                                </h2>
-                                <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">
-                                    Your transaction has been verified successfully.
+                                {/* <h2 id="payment-success-title" className="mt-3 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+                                    Verification Successful!
+                                </h2> */}
+
+                                {customer?.visit_status == "IN" ? (
+                                    <p className="mt-2 text-base font-medium text-slate-500">
+                                        Welcome To,
+                                    </p>
+                                ) : (
+                                    <p className="mt-2 text-base font-medium text-slate-500">
+                                        Thank you for visiting
+                                    </p>
+                                )}
+                                {/* <p className="mt-2 text-base font-medium text-slate-500">
+                                    Welcome To,
+                                </p> */}
+                                {/* <p className="mt-1 text-lg font-extrabold tracking-tight text-orange-600 sm:text-xl">
+                                    CHiPS Office
+                                </p> */}
+
+                                <p className="mt-1 text-lg font-extrabold tracking-tight text-orange-600 sm:text-xl">
+                                    {premises_name}
                                 </p>
+
                             </div>
 
-                            {customer && (
-                                <div className="mt-6 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50/60 p-4 text-left">
-                                    <p className="mb-3 text-xs font-bold uppercase tracking-wider text-emerald-800">Customer details</p>
-                                    <p className="text-xs text-slate-500">Customer name</p>
-                                    <p className="mt-0.5 break-words text-base font-bold text-slate-900">{customer.name}</p>
-                                    <p className="mt-3 text-xs text-slate-500">Mobile number</p>
-                                    <p className="mt-0.5 break-words text-sm font-semibold text-slate-900">{customer.mobile}</p>
+                            {/* Customer details */}
+                            <div className="mt-5 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50/70 p-4 text-left sm:p-5">
+                                <div className="mb-4 flex items-center gap-2.5">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                                        <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden="true">
+                                            <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-sm font-bold text-emerald-800 sm:text-base">Visitor Details</p>
                                 </div>
-                            )}
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1.25fr_0.7fr] sm:gap-0">
+                                    <div className="min-w-0 sm:pr-3">
+                                        <p className="text-xs text-slate-500 sm:text-sm">Visitor Name</p>
+                                        <p className="mt-1 break-words text-sm font-bold text-slate-900 sm:text-base">{customer?.name || "Geetanjali"}</p>
+                                    </div>
+                                    <div className="min-w-0 border-emerald-200 sm:border-l sm:px-3">
+                                        <p className="text-xs text-slate-500 sm:text-sm">Mobile Number</p>
+                                        <p className="mt-1 break-words text-sm font-bold text-slate-900 sm:text-base">
+                                            {customer?.mobile
+                                                ? `XXXXXX${String(customer.mobile).slice(-4)}`
+                                                : "XXXXXX7337"}
+                                        </p>
+                                        {/* <p className="mt-1 break-words text-sm font-bold text-slate-900 sm:text-base">{customer?.mobile || "9399107337"}</p> */}
+                                    </div>
+                                    <div className="min-w-0 border-emerald-200 sm:border-l sm:pl-3">
+                                        <p className="text-xs text-slate-500 sm:text-sm">Gender</p>
+                                        <p className="mt-1 break-words text-sm font-bold text-slate-900 sm:text-base">{customer?.gender || "Female"}</p>
+                                        {/* <p className="mt-1 break-words text-sm font-bold text-slate-900 sm:text-base">{"Female"}</p> */}
 
-                            {txnId && (
-                                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Transaction ID</p>
-                                    <p className="mt-1 break-all font-mono text-xs text-slate-700">{txnId}</p>
+                                    </div>
                                 </div>
-                            )}
+                            </div>
 
+                            {/* Existing countdown UI and behavior retained */}
                             <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-100">
                                 <div
-                                    className="h-full rounded-full bg-emerald-400 transition-all duration-1000"
+                                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-1000"
                                     style={{ width: `${Math.max(0, Math.min(100, (successCountdown / 10) * 100))}%` }}
                                 />
                             </div>
                             <p className="mt-2 text-center text-xs text-slate-500">
                                 Refreshing in {successCountdown} seconds...
                             </p>
+
+                            {/* Decorative bottom shapes */}
+                            <div className="pointer-events-none absolute -bottom-8 -left-8 h-20 w-32 rounded-full bg-emerald-100/60 blur-md" />
+                            <div className="pointer-events-none absolute -bottom-10 right-0 h-20 w-32 rounded-tl-full bg-teal-100/60" />
                         </div>
                     </div>
                 </div>
             )}
 
-            <section className="h-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-2xl text-teal-700">
-                        ▦
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold tracking-tight text-slate-950">Scan QR Code</h2>
-                    </div>
-                </div>
+            {/* <section className="rounded-[22px] border border-slate-100 bg-gradient-to-br from-slate-50/90 to-white p-2.5 sm:p-3"> */}
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white/80 p-2 sm:p-2.5">
+                {details && qrPath ? (
+                    <div className="flex flex-col items-center">
+                        {/* Bigger QR scanner */}
+                        <div className="rounded-[20px] border border-slate-100 bg-white p-1.5 shadow-[0_8px_25px_rgba(60,80,130,0.12)] ring-1 ring-slate-100">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={qrImageUrl}
+                                alt="Transaction QR code"
+                                className="h-[min(280px,78vw)] w-[min(280px,78vw)] object-contain sm:h-72 sm:w-72 lg:h-80 lg:w-80"
+                                onError={() =>
+                                    setError(
+                                        `QR image could not be loaded. Check the backend static path: ${qrImageUrl}`
+                                    )
+                                }
+                            />
+                        </div>
 
-                <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-cyan-50/40 p-3 sm:p-4">
-                    {details && qrPath ? (
-                        <div className="flex flex-col items-center">
-                            <div className="rounded-2xl border border-white bg-white shadow-sm ring-1 ring-slate-200">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                    src={qrImageUrl}
-                                    alt="Transaction QR code"
-                                    className="h-[min(288px,75vw)] w-[min(288px,75vw)] object-contain sm:h-80 sm:w-80 lg:h-96 lg:w-96"
-                                    onError={() =>
-                                        setError(`QR image could not be loaded. Check the backend static path: ${qrImageUrl}`)
-                                    }
-                                />
-                            </div>
-
-                            <div className="mt-3 w-full rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
-                                {paymentSuccess ? (
-                                    <div className="text-center">
-                                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-700">✓</div>
-                                        <h3 className="mt-3 text-lg font-bold text-emerald-700">Successful!</h3>
-                                        <p className="mt-1 text-sm text-slate-500">Your transaction has been verified successfully.</p>
+                        {/* Compact status panel */}
+                        <div className="mt-2.5 w-full rounded-2xl border border-slate-200 bg-white/95 p-2.5 sm:p-3">
+                            {paymentSuccess ? (
+                                <div className="text-center">
+                                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-700">
+                                        ✓
                                     </div>
-                                ) : (
-                                    <>
-                                        <p className="text-xs font-medium text-slate-500">Current status</p>
-                                        <div className={`mt-1.5 flex items-center gap-2 rounded-xl px-3 py-2 ${["success", "successful", "completed", "paid"].includes(transactionStatus.toLowerCase())
+                                    <h3 className="mt-2 text-lg font-bold text-emerald-700">
+                                        Successful!
+                                    </h3>
+                                    <p className="mt-1 text-sm text-slate-500">
+                                        Your transaction has been verified successfully.
+                                    </p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* <p className="text-xs font-medium text-slate-500">
+                                        Current status
+                                    </p>
+
+                                    <div
+                                        className={`mt-1.5 flex items-center gap-2 rounded-xl px-3 py-2 ${["success", "successful", "completed", "paid"].includes(
+                                            transactionStatus.toLowerCase()
+                                        )
                                             ? "bg-emerald-50 text-emerald-800"
-                                            : ["failed", "failure", "error"].includes(transactionStatus.toLowerCase())
+                                            : ["failed", "failure", "error"].includes(
+                                                transactionStatus.toLowerCase()
+                                            )
                                                 ? "bg-rose-50 text-rose-800"
                                                 : "bg-amber-50 text-amber-950"
-                                            }`}>
-                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">◷</span>
-                                            <span className="font-bold">
-                                                {getFriendlyStatus(transactionStatus, isPolling, loading)}
-                                            </span>
-                                        </div>
+                                            }`}
+                                    >
+                                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                                            ◷
+                                        </span>
+                                        <span className="font-bold">
+                                            {getFriendlyStatus(
+                                                transactionStatus,
+                                                isPolling,
+                                                loading
+                                            )}
+                                        </span>
+                                    </div> */}
 
-                                        {customer && (
-                                            <div className="mt-4 rounded-xl border border-slate-200 p-3">
-                                                <p className="text-xs text-slate-500">Customer Name</p>
-                                                <p className="mt-1 break-words font-semibold text-slate-900">{customer.name}</p>
-                                                <p className="mt-3 text-xs text-slate-500">Mobile Number</p>
-                                                <p className="mt-1 font-semibold text-slate-900">{customer.mobile}</p>
-                                            </div>
-                                        )}
-
-                                        {txnId && (
-                                            <p className="mt-2 break-all text-center text-xs text-slate-400">
-                                                Transaction ID: {txnId}
+                                    {/* {customer && (
+                                        <div className="mt-3 rounded-xl border border-slate-200 p-3">
+                                            <p className="text-xs text-slate-500">
+                                                Visitor Name
                                             </p>
-                                        )}
-                                        <p className="mt-2 text-center text-xs text-slate-400">Please do not close this page.</p>
-                                    </>
-                                )}
+                                            <p className="mt-1 break-words font-semibold text-slate-900">
+                                                {customer.name}
+                                            </p>
 
+                                            <p className="mt-2 text-xs text-slate-500">
+                                                Mobile Number
+                                            </p>
+                                            <p className="mt-1 font-semibold text-slate-900">
+                                                {customer.mobile}
+                                            </p>
+                                        </div>
+                                    )} */}
 
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex min-h-[360px] flex-col items-center justify-center px-4 text-center">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-3xl text-teal-700 shadow-sm ring-1 ring-slate-200">▦</div>
-                            <p className="mt-5 text-base font-semibold text-slate-900">
-                                {loading ? "Generating your QR..." : "Preparing QR code"}
-                            </p>
-                            <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">
-                                {loading
-                                    ? "Please wait while we prepare your secure payment QR code."
-                                    : "Your QR code will appear here once it is ready. Please try again in a moment if it does not appear."}
-                            </p>
-                            {loading && (
-                                <div className="mt-5 h-6 w-6 animate-spin rounded-full border-2 border-teal-200 border-t-teal-700" />
-                            )}
-                            {error && (
-                                <p role="alert" className="mt-3 break-words text-sm text-rose-600">{error}</p>
+                                    {txnId && (
+                                        <p className="mt-2 break-all text-center text-xs text-slate-400">
+                                            QR ID: {txnId}
+                                        </p>
+                                    )}
+
+                                    <p className="mt-1.5 text-center text-xs text-slate-400">
+                                        Note: Please scan the QR code above using the Aadhaar app to verify Your authenticity.
+                                    </p>
+                                </>
                             )}
                         </div>
-                    )}
-                </div>
-            </section>
+                    </div>
+                ) : (
+                    <div className="flex min-h-[280px] flex-col items-center justify-center px-4 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-3xl text-teal-700 shadow-sm ring-1 ring-slate-200">
+                            ▦
+                        </div>
+
+                        <p className="mt-4 text-base font-semibold text-slate-900">
+                            {loading ? "Generating your QR..." : "Preparing QR code"}
+                        </p>
+
+                        <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">
+                            {loading
+                                ? "Please wait while we prepare your secure payment QR code."
+                                : "Your QR code will appear here once it is ready. Please try again in a moment if it does not appear."}
+                        </p>
+
+                        {loading && (
+                            <div className="mt-4 h-6 w-6 animate-spin rounded-full border-2 border-teal-200 border-t-teal-700" />
+                        )}
+
+                        {error && (
+                            <p role="alert" className="mt-3 break-words text-sm text-rose-600">
+                                {error}
+                            </p>
+                        )}
+                    </div>
+                )}
+            </div>
+            {/* </section> */}
         </div>
     );
 }

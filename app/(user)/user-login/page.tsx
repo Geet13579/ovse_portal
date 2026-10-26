@@ -75,7 +75,7 @@ export default function UserLogin() {
             }
 
             saveAdminToken(token);
-            router.replace("/user/intent-request");
+            window.location.href = "/user/intent-request"
         } catch (err) {
             setError(err instanceof Error ? err.message : "Something went wrong.");
         } finally {
@@ -87,9 +87,9 @@ export default function UserLogin() {
         <LoginCard
             theme="user"
             icon="👤"
-            eyebrow="Secure Portal"
+            eyebrow="OVSE Portal"
             title="Welcome Back!"
-            subtitle="Sign in to continue to your account"
+            subtitle="Sign in to continue your premises Admin account"
         >
             <form onSubmit={handleLogin} className="space-y-5">
                 <FormField label="Email" htmlFor="user-email" required>
