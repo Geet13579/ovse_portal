@@ -21,6 +21,7 @@ type VisitRecord = {
     visitor_mobile?: string | number | null;
     in?: Activity | null;
     out?: Activity | null;
+    gender?: string | null;
     created_at?: string | null;
     transaction_id?: string | number | null;
 };
@@ -112,7 +113,11 @@ function getVisitorName(row: VisitRecord) {
 }
 
 function getVisitorMobile(row: VisitRecord) {
-    return String(row.mobile || row.visitor_mobile || "—");
+    return `XXXXXX${String(row.mobile || row.visitor_mobile).slice(-4)}`;
+}
+
+function getVisitorGender(row: VisitRecord) {
+    return String(row.gender || "—");
 }
 
 function getVisitStatus(row: VisitRecord) {
@@ -892,7 +897,7 @@ export default function VisitorInOutDetailsPage() {
                                                 </p>
 
                                                 <p className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">
-                                                    Gender
+                                                    {getVisitorGender(row)}
                                                 </p>
 
                                             </td>

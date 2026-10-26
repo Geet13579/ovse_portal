@@ -381,11 +381,7 @@ export default function UsersPage() {
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Manage registered users and their access permissions.
             </p>
-            {refreshedAt && (
-              <p className="mt-1 text-xs text-slate-400">
-                Last refreshed: {refreshedAt}
-              </p>
-            )}
+
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
