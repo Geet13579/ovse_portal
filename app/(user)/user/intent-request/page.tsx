@@ -99,7 +99,7 @@ export default function QRCodePage() {
                             <span aria-hidden="true" className="text-base">
                                 ←
                             </span>
-                            Back to Visitor Details
+                            Back to Visitor Analytics
                         </Link>
                     </div>
 
